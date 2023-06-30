@@ -2,7 +2,7 @@
 // @name         Vira's PetPet Battler
 // @namespace    Violentmonkey Scripts
 // @version      0.1
-// @description  try to take over the world!
+// @description  Plays petpet battle by randomly pressing the buttons
 // @author       rmsthebest
 // @match        https://www.neopets.com/games/petpet_battle/ppb1.phtml*
 // @icon         https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/favicon/favicon-32x32.png
