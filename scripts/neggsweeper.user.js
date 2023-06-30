@@ -5,6 +5,7 @@
 // @description  try to take over the world!
 // @author       You
 // @match        https://www.neopets.com/games/neggsweeper/neggsweeper.phtml*
+// @match        https://www.neopets.com/games/neggsweeper/index.phtml
 // @icon         https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/favicon/favicon-32x32.png
 // @require      ./common/ui.js
 // @resource someCss ../resources/html/some.css
@@ -13,7 +14,14 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
+// Ideas for improvements:
+// Track stats in info box at the top. Current win/loss. Todays profits, etc.
+// Toggle switches for if we want to do: Autoplay or just mark greens, if we actually flag the mine spots
+// A debug toggle, plays one step and logs possbile interesting things
+// a hint button for if we get stuck
+
 var KEY_PLAY = 'playNeggSweeper';
+var NP_LIMIT = 3000;
 // useful array for getting adjacent nodes, i.e. neighbours
 var NEIGHBOUR_OFFSET = [[1,-1],[1,0],[1,1],[0,-1],[0,1],[-1,-1],[-1,0],[-1,1]];
 var SAFE_IMAGE = "https://i.imgur.com/IvJ4RyN.gif";
@@ -45,7 +53,7 @@ var to_clear = [];
 var to_flag = [];
 
 add_header();
-addToggleButton();
+add_buttons();
 
 if (JSON.parse(localStorage.getItem(KEY_PLAY))) {
     // setTimeout(start, 2000 * (1 + Math.random())); // 1-2 seconds
@@ -435,64 +443,58 @@ function guess() {
     let default_prob = nof_unresolved / (total_nof_mines() - nof_flagged);
 
     let prob_map = board.map((row,y) => {
-        row.map((b,x) => {
-            let prob = b == HIDDEN ? 0 : Math.min((hidden[y][x] - mines[y][x]) / mines[y][x], default_prob);
+        return row.map((b,x) => {
+            var prob = default_prob;
+            if (mines[y][x] != 0) {
+                prob = b != HIDDEN ? 0 : Math.min((hidden[y][x] - mines[y][x]) / mines[y][x], default_prob);
+            }
             max_prob = Math.max(prob, max_prob);
+            return prob;
         })
     })
 
     max_prob = Math.max(max_prob, default_prob);
-    // set default probability  for all the ones we have no other info for
-    // if (p_max < default_prob) {
-        for (r = 0; r < size; r++) {
-            for (c = 0; c < size; c++) {
-                if (!mines[r][c]) {
-                    hidden[r][c] = default_prob;
-                }
-            }
-        }
-    // }
     var eligble = [];
     // compile list of highest probability
     for (r = 0; r < size; r++) {
         for (c = 0; c < size; c++) {
             if (prob_map[r][c] == max_prob) {
-                eligble.push([r,c]);
+                eligble.push([c,r]); // to_clear expects [x,y]... why did i do that
             }
         }
     }
     // pick a random square to click
     let i = Math.floor(Math.random()*eligble.length);
     console.info("Guessing: " + eligble[i]);
-    to_clear.push(eligble[i][0], eligble[i][1]);
+    to_clear.push(eligble[i]);
 }
 
 // ---------------SETUP UI --------------------
 
 
-function addToggleButton() {
+function add_buttons() {
     var toggleButton = document.createElement('button');
     toggleButton.id = 'autoplayer';
     toggleButton.style.display = 'block';
     toggleButton.style.margin = '0 auto';
-    toggleButton.addEventListener('click', toggleAutoPlay);
+    toggleButton.addEventListener('click', toggle_auto);
 
     var content = document.getElementsByClassName('div-stuff')[0];
     if (content) {
         content.append(toggleButton);
     }
-    updateButtonText();
+    update_play_button();
 }
 
-function updateButtonText() {
+function update_play_button() {
     var autoplayIsOn = !!JSON.parse(localStorage.getItem(KEY_PLAY));
     document.getElementById('autoplayer').innerHTML = (autoplayIsOn ? 'Stop AutoPlay' : 'Start AutoPlay');
 }
 
-function toggleAutoPlay() {
+function toggle_auto() {
     var autoplayIsOn = !!JSON.parse(localStorage.getItem(KEY_PLAY));
     localStorage.setItem(KEY_PLAY, !autoplayIsOn);
-    updateButtonText();
+    update_play_button();
 
     if (!autoplayIsOn) {
         // setTimeout(start, 1000 * (1 + Math.random()));
