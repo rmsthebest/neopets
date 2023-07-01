@@ -5,6 +5,7 @@
 // @description  Plays petpet battle by randomly pressing the buttons
 // @author       rmsthebest
 // @match        https://www.neopets.com/games/petpet_battle/ppb1.phtml*
+// @match        https://www.neopets.com/quickref.phtml
 // @icon         https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/favicon/favicon-32x32.png
 // @inject-into auto
 // @require      ./common/ui.js
@@ -12,10 +13,15 @@
 // @resource headerHTML ../resources/html/default_box.html
 // @grant        GM_getResourceText
 // @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
 // ==/UserScript==
 
 var KEY_PLAY = 'playPetPetBattle';
 var PETPET_STATS= 'PETPET_STATS';
+var STRONG = "NAME OF PET WITH STRONG PETPET"; // DONT FORET TO UPDATE THESE. TODO: make textfield inputs
+var WEAK = "NAME OF PET WITH WEAK PETPET";
+var ACTIVE = "ACTIVE_PET";
 
 add_header();
 addToggleButton();
@@ -26,9 +32,17 @@ if (JSON.parse(localStorage.getItem(KEY_PLAY))) {
 }
 
 function play() {
-    if(document.URL.indexOf("games/petpet_battle/ppb1.phtml") != -1) {
+    if(document.URL.indexOf("quickref.phtml") != -1) {
+        location.replace("https://www.neopets.com/games/petpet_battle/ppb1.phtml");
+    } else if(document.URL.indexOf("games/petpet_battle/ppb1.phtml") != -1) {
         let new_game = document.getElementsByName("New_Game");
         if (new_game.length != 0) {
+            let active = GM_getValue(ACTIVE, STRONG);
+            if (active == STRONG) {
+                GM_setValue(ACTIVE, WEAK);
+                location.replace("https://www.neopets.com/process_changepet.phtml?new_active_pet=" + WEAK);
+                return;
+            }
             let content = document.getElementsByClassName("content")[0].innerHTML.toString();
             var ratio_pattern = /Your won\/lost ratio today is \d+\/\d+/g;
             var score_pattern = /Your present score is \d+/g;
@@ -51,6 +65,12 @@ function play() {
             }
             new_game[0].click();
         } else {
+            let active = GM_getValue(ACTIVE, WEAK);
+            if (active == WEAK) {
+                GM_setValue(ACTIVE, STRONG);
+                location.replace("https://www.neopets.com/process_changepet.phtml?new_active_pet=" + STRONG);
+                return;
+            }
             fight();
         }
     }
