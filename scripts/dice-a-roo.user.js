@@ -2,7 +2,7 @@
 // @name         Vira's Dice-A-Roo Player
 // @namespace    Violentmonkey Scripts
 // @version      0.1
-// @description  Counts potatoes
+// @description  Rolls the dice
 // @author       rmsthebest
 // @match        https://www.neopets.com/games/play_dicearoo.phtml
 // @match        https://www.neopets.com/games/dicearoo.phtml
@@ -48,9 +48,7 @@ function start() {
     if(document.URL.indexOf("games/dicearoo.phtml") != -1) {
         new_game_update_stats();
         delay(function(){ $("[value='Lets Play! (Costs 5 NP)']").click();}, INTERVAL);
-
-    }
-    if(document.URL.indexOf("games/play_dicearoo.phtml") != -1) {
+    } else if(document.URL.indexOf("games/play_dicearoo.phtml") != -1) {
         play();
     }
 }
@@ -65,7 +63,7 @@ function new_game_update_stats() {
         stats = { games: 0, current: current, average: average, history: history};
 
     } else {
-        stats.games.games++;
+        stats.games++;
     }
     
     update_statsbox_text();
@@ -89,7 +87,10 @@ function update_statsbox_text() {
         document.getElementById('statsbox').innerHTML = "No stats available yet";
     } else {
         document.getElementById('statsbox').innerHTML = "Rolls this round: " + stats.current.rolls +
-            "<br>Averages:" + " level: " + stats.average.level + " rolls: " + stats.average.rolls;
+            "<br>Average roll count: " + " rolls: " + Math.round(stats.average.rolls) +
+            // "<br>Current Jackkpot: " + " rolls: " + Math.round(stats.average.rolls) +
+            // "<br>Winnings: + sum(stats.history.jackpots) +
+            "<br>Games Played: " + stats.games;
     }
 }
 
@@ -111,6 +112,8 @@ function play() {
     // Win!
     let content = document.getElementsByClassName("content")[0].outerHTML.toString();
     if (content.includes("JACKPOT")) {
+        // let price = regex
+        // stats.history.jackpots.push(prize);
         game_end(stats);
         alert("JACKPOT!!");
         return;
@@ -120,9 +123,7 @@ function play() {
     let press_me = document.querySelector("input[value='Press Me']");
     if (press_me) {
         game_end(stats);
-        GM_setValue(STATS, stats);
         delay(function() {press_me.click();}, INTERVAL);
-        return;
     }
 
     // Normal Play
@@ -165,7 +166,6 @@ function play() {
         stats.current.rolls++;
         delay(function() {roll_again.click();}, INTERVAL);
     }
-    console.debug("Updating stats");
     GM_setValue(STATS, stats);
 }
 
@@ -195,7 +195,6 @@ function toggleAutoPlay() {
     updateButtonText();
 
     if (!autoplayIsOn) {
-        // setTimeout(start, 1000 * (1 + Math.random()));
-        play();
+        start();
     }
 }
