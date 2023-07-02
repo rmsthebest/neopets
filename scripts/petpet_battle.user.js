@@ -37,20 +37,14 @@ function play() {
     } else if(document.URL.indexOf("games/petpet_battle/ppb1.phtml") != -1) {
         let new_game = document.getElementsByName("New_Game");
         if (new_game.length != 0) {
-            let active = GM_getValue(ACTIVE, STRONG);
-            if (active == STRONG) {
-                GM_setValue(ACTIVE, WEAK);
-                location.replace("https://www.neopets.com/process_changepet.phtml?new_active_pet=" + WEAK);
-                return;
-            }
             let content = document.getElementsByClassName("content")[0].innerHTML.toString();
             var ratio_pattern = /Your won\/lost ratio today is \d+\/\d+/g;
             var score_pattern = /Your present score is \d+/g;
             var nr_pattern = /\d+/g;
-            let ratio = content.match(ratio_pattern).toString().match(nr_pattern);
-            let score = content.match(score_pattern).toString().match(nr_pattern);
+            let ratio = content.match(ratio_pattern);
+            let score = content.match(score_pattern);
             if (score && ratio ) {
-                let stats = {ratio : ratio, score : score};
+                let stats = {ratio : ratio.toString().match(nr_pattern), score : score.toString().match(nr_pattern)};
                 let stats_json = JSON.stringify(stats);
                 localStorage.setItem(PETPET_STATS, stats_json);
                 update_statsbox_text();
@@ -63,7 +57,13 @@ function play() {
                     return;
                 }
             }
-            new_game[0].click();
+            let active = GM_getValue(ACTIVE, STRONG);
+            if (active == STRONG) {
+                GM_setValue(ACTIVE, WEAK);
+                location.replace("https://www.neopets.com/process_changepet.phtml?new_active_pet=" + WEAK);
+            } else {
+                new_game[0].click();
+            }
         } else {
             let active = GM_getValue(ACTIVE, WEAK);
             if (active == WEAK) {
