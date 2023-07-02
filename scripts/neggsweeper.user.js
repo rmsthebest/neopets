@@ -21,13 +21,17 @@
 // a hint button for if we get stuck
 
 var KEY_PLAY = 'playNeggSweeper';
+var DEBUG = false;
+var FAST_MODE = false; // this will only do the math once, so not all next steps will be highlighted
 var NP_LIMIT = 3000;
 // useful array for getting adjacent nodes, i.e. neighbours
 var NEIGHBOUR_OFFSET = [[1,-1],[1,0],[1,1],[0,-1],[0,1],[-1,-1],[-1,0],[-1,1]];
-var SAFE_IMAGE = "https://i.imgur.com/IvJ4RyN.gif";
-var UNSAFE_IMAGE = "https://i.imgur.com/2oyFeS3.gif";
+var SAFE_IMAGE = "https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/green_bean.gif";
+var UNSAFE_IMAGE = "https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/red_bean.gif";
 var HIDDEN = -1;
-var FLAGGED = -2;
+var SAFE = -2;
+var FLAGGED = -3;
+var UNSAFE = -4;
 // full grid node
 var grid;
 // all nodes 
@@ -138,7 +142,8 @@ function update_grid_images() {
     to_flag.forEach(fancy_images, {image: UNSAFE_IMAGE});
 }
 function fast_flagging() {
-    to_flag.forEach(update_board, {value: -3});
+    to_flag.forEach(update_board, {value: UNSAFE});
+    to_clear.forEach(update_board, {value: SAFE});
 }
 function update_board(f) {
     board[f[1]][f[0]] = this.value;
@@ -147,7 +152,6 @@ function update_board(f) {
 
 function my_solve() {
     read_page();
-    // TODO: first check if we have something saved in to_clear and to_flag
     update_grid_images();
     to_clear = [];
     do {
@@ -156,12 +160,16 @@ function my_solve() {
         matrix_solve();
         update_grid_images();
         fast_flagging();
-    } while (to_flag.length > 0);
-    // TODO: save to_clear and to_flag
+    } while (to_flag.length != 0 && !FAST_MODE)
     if (to_clear.length == 0) {
         guess();
     }
-     clear(to_clear[0][0], to_clear[0][1]);
+
+    if(!DEBUG) {
+        clear(to_clear[0][0], to_clear[0][1]);
+    } else {
+        console.debug(to_clear);
+    }
 }
 
 
@@ -181,14 +189,21 @@ function matrix_solve() {
             if (board[y][x] > 0) {
                 let neighbours = get_neighbours(x,y);
                 let unres = neighbours.filter(is_hidden);
-                if (unres.length > 0) {
+                let mine_count = board[y][x] - mines[y][x];
+                // this shouldnt be needed, but reduced form jumbles lines sometimes
+                // and hey, maybe we save some time by making matrix smaller?
+                if (unres.length > 0 && mine_count == 0) {
+                    to_clear = to_clear.concat(unres);
+                } else if (unres.length > 0 && unres.length == mine_count) {
+                    to_flag = to_flag.concat(unres);
+                } else if (unres.length > 0 && mine_count > 0) {
                     unres.forEach(function(u) {
                         // this is really ugly, but we're just making sure we only add each node once...
                         if (!nodes.some(function(a) {return (a[0] == u[0] && a[1] == u[1])})) {
                             nodes.push(u);
                         }
                     })
-                    n.push(board[y][x] - mines[y][x]);
+                    n.push(mine_count);
                     abc.push(unres);
                 }
             }
@@ -205,13 +220,46 @@ function matrix_solve() {
         row.push(n[i]);
         matrix.push(row);
     }
-    // console.debug("nodes:")
-    // console.debug(nodes);
-    // console.debug("matrix:")
-    // console.debug(matrix);
+    // I dont think sorting does anything
+   // sort for reduced row from function;
+    //nodes.sort(function(a,b) {
+    //  if (a[1] < b[1] || (a[1] == b[1] && a[0] < b[0] ) ) {
+    //   return -1;
+    //  } else if (a[1] > b [1] || (a[1] ==  b[1] && a[0] > b[0])) {
+    //    return 1;
+    //  }
+    //  return 0;
+    //});
+
+    // if we are solving a matrix with all nodes on the board, we can use mine count to solve matrix
+    let nof_hidden = total_nof_hidden();
+    if (nof_hidden == nodes.length) {
+        let nof_flagged = total_nof_flagged();
+        let bonus_row = new Array(nodes.length).fill(1);
+        console.debug(nof_flagged);
+        bonus_row.push(total_nof_mines() - nof_flagged);
+        matrix.push(bonus_row);
+    }
+    // I dont think sorting does anything
+  //    matrix.sort(function(a,b) {
+  //    let ai = a.indexOf(1);
+  //    let bi = b.indexOf(1);
+  //    if (ai > bi) {
+  //      return 1;
+  //    } else if (ai < bi) {
+  //      return -1;
+  //    }
+  //    return 0;
+  //});
     let reduced = reducedRowEchelonForm(matrix);
-    // console.debug("reduced:")
-    // console.debug(reduced);
+    if(DEBUG) {
+        console.debug("nodes:")
+        console.debug(nodes);
+        console.debug("matrix:")
+        console.debug(matrix);
+        console.debug("reduced:")
+        console.debug(reduced);
+    }
     for(var i=0; i < matrix.length; i++) {
         var pos_indexes = [];
         var neg_indexes = [];
@@ -324,14 +372,14 @@ function reducedRowEchelonForm(matrix) {
 
 function start() {
     if(document.URL.indexOf("games/neggsweeper/neggsweeper.phtml") != -1) {
-        if (pick_hardest()) {
+        if (new_game()) {
             return;
         }
         my_solve();
     }
 }
 
-function pick_hardest() {
+function new_game() {
     var select = document.evaluate("//form/select[@name='game_level']", document,
     		null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
 
@@ -363,7 +411,9 @@ function pick_hardest() {
                     return 1;
                 }
             }
-            window.setTimeout(function(){select.parentNode.submit();}, 1000);
+            if(!DEBUG) {
+                window.setTimeout(function(){select.parentNode.submit();}, 1000);
+            }
         }
 
         return 1;
@@ -402,28 +452,21 @@ function total_nof_mines() {
         default: 40;
     }
 }
+function total_nof_hidden() {
+    return board.reduce(function(acc, r) { return acc + r.reduce(function(acc, v){return acc + (v === HIDDEN) },0)},0);
+}
+function total_nof_flagged() {
+    return board.reduce(function(acc, r) { return acc + r.reduce(function(acc, v){return acc + (v <= FLAGGED) },0)},0);
+}
 
 // This will start guessing in the corners, hoping for a blowup
 // If tha fails it will get the simple probabilities (looking only at neighbours)
 // and pick a random one with the lowest of those
 function guess() {
     var r, c;
-    var nof_flagged = 0;
-    var nof_unresolved = 0;
-    var max_prob = 0;
-    for (r = 0; r < size; r++) {
-        for (c = 0; c < size; c++) {
-            if (board[r][c] == -1 ) {
-                nof_unresolved++;
-            } else if ( board[r][c] <= -2) {
-                nof_flagged++;
-            }
-            mines[r][c] = (board[r][c] != -1);
-            hidden[r][c] = 0.0;
-        }
-    }
+    let nof_hidden = total_nof_hidden();
     // if we have to start guessing in early game, pick corners
-    if (nof_unresolved > size*size - 4) {
+    if (nof_hidden > size*size - 4) {
         if (board[0][0] == HIDDEN) {
             to_clear = [[0,0]];
             return;
@@ -440,25 +483,24 @@ function guess() {
     }
 
     
-    let default_prob = nof_unresolved / (total_nof_mines() - nof_flagged);
-
+    // chance of clicking mine by randomly picking
+    let random_pick = (total_nof_mines() - total_nof_flagged()) / nof_hidden;
+    var best_prob = random_pick;
     let prob_map = board.map((row,y) => {
-        return row.map((b,x) => {
-            var prob = default_prob;
-            if (mines[y][x] != 0) {
-                prob = b != HIDDEN ? 0 : Math.min((hidden[y][x] - mines[y][x]) / mines[y][x], default_prob);
-            }
-            max_prob = Math.max(prob, max_prob);
-            return prob;
+        return row.map((n,x) => {
+            var prob = random_pick;
+            if (hidden[y][x] != 0) {
+                prob = n != HIDDEN ? 1 : Math.max((hidden[y][x] - mines[y][x]) / hidden[y][x], random_pick);
+            } 
+            best_prob = Math.min(prob, best_prob);
         })
     })
 
-    max_prob = Math.max(max_prob, default_prob);
     var eligble = [];
-    // compile list of highest probability
+    // compile list of best guesses
     for (r = 0; r < size; r++) {
         for (c = 0; c < size; c++) {
-            if (prob_map[r][c] == max_prob) {
+            if (prob_map[r][c] == random_pick) {
                 eligble.push([c,r]); // to_clear expects [x,y]... why did i do that
             }
         }
