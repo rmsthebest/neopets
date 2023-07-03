@@ -26,18 +26,26 @@ add_header();
 play();
 
 function play() {
-    var guess = document.getElementsByName("guess");
-    for(var i = 0; i < guess.length; i++) {
-        if(guess[i].type.toLowerCase() == 'text') {
-            guess= guess[i];
-            break;
+    var guess_button = document.querySelector("input[type='submit'][value='Guess!']")
+    if (guess_button) {
+        var guess = document.getElementsByName("guess");
+        for(var i = 0; i < guess.length; i++) {
+            if(guess[i].type.toLowerCase() == 'text') {
+                guess= guess[i];
+                break;
+            }
+        }
+        let res = count();
+        if (res > 0 && res < 80) {
+            guess.value = res;
+            setTimeout(function() {guess_button.click()}, 3500 * (1 + Math.random()));
+        } else {
+            setTimeout(function() {location.reload()}, 3500 * (1 + Math.random()));
         }
     }
-    var submit = document.querySelector("input[type='submit'][value='Guess!']")
-    let res = count();
-    if (res > 0 && res < 80) {
-        guess.value = res;
-        setTimeout(function() {submit.click()}, 3500 * (1 + Math.random()));
+    var again = document.querySelector("input[type='submit'][value='Play Again']");
+    if (again) {
+        setTimeout(function() {again.click()}, 3500 * (1 + Math.random()));
     }
 }
 

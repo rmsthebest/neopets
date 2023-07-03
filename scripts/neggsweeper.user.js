@@ -278,6 +278,16 @@ function matrix_solve() {
         // -X - Y = -2 => all nodes are mines
         // X - Y = -1 => X is clear and Y is mine
         // X - Y - Z = 1 => X is mine, Y and Z are clear (sum of positives)
+
+        // If none of that is true we can get probability
+        // X + Y     = 1 => 1 / 2 = 50% 
+        // X + Y + Z = 1 => 1 / 3 = 33.33%
+        // X - Y - Z = 0 =>  0 0 0 / 1 1 0 / 1 0 1 => X = 66% Y/Z = 33% forumla becomes => sum_opposite / (sum_sign + sum_opposite)
+        // X + Y - Z = 1 =>  1 0 0 / 0 1 0 / 1 1 1 => X/Y = 50% Z = 33% sum_opposite / (sum_sign + sum_opposite ) 2 / 4
+        // X + Y + Z - W = 1 => 110 1/101 1/100 0/010 0/001 0 => X/Y/Z = 2/5 W = 2/5    3 - 1 = 1
+        // X + Y + Z - W = 2 => 1100/1010/0110/1111 => X/Y/Z = 3/5 W = 1/5    3 - 1 = 2
+        // A + B + C + D - X = 2 =>  
+        
         var pos_clear = false;
         var neg_clear = false;
         var pos_flag = false;
@@ -310,8 +320,6 @@ function matrix_solve() {
             to_flag = to_flag.concat(flag_nodes);
         }
     }
-
-    
 }
 
 function arrayInArray(needle, haystack) {
@@ -463,7 +471,6 @@ function total_nof_flagged() {
 // If tha fails it will get the simple probabilities (looking only at neighbours)
 // and pick a random one with the lowest of those
 function guess() {
-    var r, c;
     let nof_hidden = total_nof_hidden();
     // if we have to start guessing in early game, pick corners
     if (nof_hidden > size*size - 4) {
@@ -493,6 +500,7 @@ function guess() {
                 prob = n != HIDDEN ? 1 : Math.max((hidden[y][x] - mines[y][x]) / hidden[y][x], random_pick);
             } 
             best_prob = Math.min(prob, best_prob);
+            return prob;
         })
     })
 
@@ -501,7 +509,7 @@ function guess() {
     for (r = 0; r < size; r++) {
         for (c = 0; c < size; c++) {
             if (prob_map[r][c] == random_pick) {
-                eligble.push([c,r]); // to_clear expects [x,y]... why did i do that
+                eligble.push([r,c]); // to_clear expects [x,y]... why did i do that
             }
         }
     }
