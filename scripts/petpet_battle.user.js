@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Vira's PetPet Battler
 // @namespace    Violentmonkey Scripts
-// @version      0.1
-// @description  Plays petpet battle by randomly pressing the buttons
+// @version      0.2
+// @description  Plays petpet battle using strategy of some random guy on the internet
 // @author       rmsthebest
 // @match        https://www.neopets.com/games/petpet_battle/ppb1.phtml*
 // @match        https://www.neopets.com/quickref.phtml
@@ -18,10 +18,18 @@
 // ==/UserScript==
 
 var KEY_PLAY = 'playPetPetBattle';
-var PETPET_STATS= 'PETPET_STATS';
-var STRONG = "NAME OF PET WITH STRONG PETPET"; // DONT FORET TO UPDATE THESE. TODO: make textfield inputs
-var WEAK = "NAME OF PET WITH WEAK PETPET";
+var PETPET_STATS = 'PETPET_STATS';
+var HEALTH = 'PETPET_HEALTH';
+var ATTACK = 'PETPET_ATTACK'; // previousĺy used attack
+var STRONG = "placeholder_strong"; // DONT FORET TO UPDATE THESE. TODO: make textfield inputs
+var WEAK = "placeholder_weak";
 var ACTIVE = "ACTIVE_PET";
+
+const health_regex = (str) => {
+    const re = /(\d+) %/g
+    let res = re.exec(str);
+    return res ? res[1] : "";
+}
 
 add_header();
 addToggleButton();
@@ -77,19 +85,53 @@ function play() {
 }
 
 function fight() {
-    var choice = Math.floor(Math.random() * (3-1)) + 1;
-    switch (choice) {
-        case 1: {let shield = document.getElementsByName("Shield"); 
-            if (shield.length != 0) {
-                shield[0].click();
-            } else {
-                document.getElementsByName("FightBB")[0].click();
-            }
-        };
-        case 2: document.getElementsByName("FightHS")[0].click();
-        default: document.getElementsByName("FightBB")[0].click();
+    let health = get_health();
+    var attack = JSON.parse(localStorage.getItem(ATTACK));
+    let shield = document.getElementsByName("Shield");
+    if (health != null && attack !== null) {
+        // Use shield if enemy is low
+        // Switch attack if we missed
+        if (health.current < 20 && shield.length != 0) {
+            attack = 2;
+        } else if (health.current >= health.prev) {
+            attack = attack ? 0 : 1;
+        } else if (shield.length == 0) {
+            attack = 0;
+        }
+    } else {
+        attack = Math.floor(Math.random() * (3-1)) + 1;
+    }
+    var button;
+    switch (attack) {
+        case 2: {button = shield[0]; break;}
+        case 1: {button = document.getElementsByName("FightHS")[0]; break;}
+        default: {button = document.getElementsByName("FightBB")[0]; break;}
     };
+    localStorage.setItem(ATTACK, JSON.stringify(attack));
+    button.click();
 }
+
+function get_health() {
+    // var my_health = document.querySelectorAll('td > img[src$="red_bar.gif"]')[0].parentNode.textContent;
+    var opponent_health = document.querySelectorAll('td > img[src$="blue_bar.gif"]');
+    // if (my_health) {
+    //     my_health = health_regex(my_health);
+    // }
+    if (opponent_health) {
+        opponent_health = health_regex(opponent_health[0].parentElement.textContent);
+        var health = JSON.parse(localStorage.getItem(HEALTH));
+        if (health) {
+            health.prev = health.current;
+            health.current = opponent_health;
+        } else {
+            health = {prev: opponent_health, current: opponent_health};
+        }
+        localStorage.setItem(HEALTH, JSON.stringify(health));
+        return health;
+    }
+    return null;
+}
+
 
 function add_statsbox() {
     var stats_box = document.createElement('div');
@@ -104,10 +146,15 @@ function add_statsbox() {
 
 function update_statsbox_text() {
     var stats = JSON.parse(localStorage.getItem(PETPET_STATS));
+    var attack = JSON.parse(localStorage.getItem(ATTACK));
+    attack = attack == null ? "None" : attack;
     if (!stats) {
         document.getElementById('statsbox').innerHTML = "No stats available yet";
     } else {
-        document.getElementById('statsbox').innerHTML = "Current Score: " + stats.score + "\nRatio:" + stats.ratio[0] + "/" + stats.ratio[1];
+        document.getElementById('statsbox').innerHTML = "Current Score: " + stats.score +
+            "<br>Ratio:" + stats.ratio[0] + "/" + stats.ratio[1] +
+            "<br>Attacked with: + " + attack
+            ;
     }
 }
 
