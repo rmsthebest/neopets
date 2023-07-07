@@ -287,6 +287,8 @@ function matrix_solve() {
         // X + Y + Z - W = 1 => 110 1/101 1/100 0/010 0/001 0 => X/Y/Z = 2/5 W = 2/5    3 - 1 = 1
         // X + Y + Z - W = 2 => 1100/1010/0110/1111 => X/Y/Z = 3/5 W = 1/5    3 - 1 = 2
         // A + B + C + D - X = 2 =>  
+
+        // 3 positive 2 negative = 1 => 1 pos 0 neg / 
         
         var pos_clear = false;
         var neg_clear = false;
@@ -493,29 +495,24 @@ function guess() {
     // chance of clicking mine by randomly picking
     let random_pick = (total_nof_mines() - total_nof_flagged()) / nof_hidden;
     var best_prob = random_pick;
-    let prob_map = board.map((row,y) => {
-        return row.map((n,x) => {
-            var prob = random_pick;
-            if (hidden[y][x] != 0) {
-                prob = n != HIDDEN ? 1 : Math.max((hidden[y][x] - mines[y][x]) / hidden[y][x], random_pick);
-            } 
-            best_prob = Math.min(prob, best_prob);
-            return prob;
-        })
-    })
-
     var eligble = [];
-    // compile list of best guesses
-    for (r = 0; r < size; r++) {
-        for (c = 0; c < size; c++) {
-            if (prob_map[r][c] == random_pick) {
-                eligble.push([r,c]); // to_clear expects [x,y]... why did i do that
+    for (var y = 0; y < size; y++) {
+        for (var x = 0; x < size; x++) {
+            if (board[y][x] == HIDDEN) {
+                let prob = Math.max((hidden[y][x] - mines[y][x]) / hidden[y][x], random_pick);
+                if (best_prob < prob) {
+                    best_prob = prob;
+                    eligble = [[x,y]]; // why do i store it like this..
+                } else if (best_prob == prob) {
+                    eligble.push([x,y]); // why do i store it like this..
+                }
             }
         }
     }
+
     // pick a random square to click
-    let i = Math.floor(Math.random()*eligble.length);
-    console.info("Guessing: " + eligble[i]);
+    let i = Math.floor(Math.random()*(eligble.length - 1));
+    console.info("Guessing: " + eligble[i] + "with a probability of hitting a mine at: " + best_prob);
     to_clear.push(eligble[i]);
 }
 
