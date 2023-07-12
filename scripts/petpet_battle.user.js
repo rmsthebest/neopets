@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vira's PetPet Battler
 // @namespace    Violentmonkey Scripts
-// @version      0.2
+// @version      0.2.1
 // @description  Plays petpet battle using strategy of some random guy on the internet
 // @author       rmsthebest
 // @match        https://www.neopets.com/games/petpet_battle/ppb1.phtml*
@@ -15,6 +15,7 @@
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 var KEY_PLAY = 'playPetPetBattle';
@@ -24,6 +25,7 @@ var ATTACK = 'PETPET_ATTACK'; // previousĺy used attack
 var STRONG = "placeholder_strong"; // DONT FORET TO UPDATE THESE. TODO: make textfield inputs
 var WEAK = "placeholder_weak";
 var ACTIVE = "ACTIVE_PET";
+const STRATEGY = false;
 
 const health_regex = (str) => {
     const re = /(\d+) %/g
@@ -87,8 +89,13 @@ function play() {
 function fight() {
     let health = get_health();
     var attack = JSON.parse(localStorage.getItem(ATTACK));
-    let shield = document.getElementsByName("Shield");
-    if (health != null && attack !== null) {
+    var headshot = document.getElementsByName("FightHS");
+    var bodyblow = document.getElementsByName("FightBB");
+    var shield = document.getElementsByName("Shield");
+    shield = shield.length != 0 ? shield : bodyblow;
+
+    // This "strategy" that is described on the internet has given me very poor winrate
+    if (health != null && attack !== null && STRATEGY) {
         // Use shield if enemy is low
         // Switch attack if we missed
         if (health.current < 20 && shield.length != 0) {
@@ -104,8 +111,8 @@ function fight() {
     var button;
     switch (attack) {
         case 2: {button = shield[0]; break;}
-        case 1: {button = document.getElementsByName("FightHS")[0]; break;}
-        default: {button = document.getElementsByName("FightBB")[0]; break;}
+        case 1: {button = headshot[0]; break;}
+        default: {button = bodyblow[0]; break;}
     };
     localStorage.setItem(ATTACK, JSON.stringify(attack));
     button.click();
@@ -153,7 +160,7 @@ function update_statsbox_text() {
     } else {
         document.getElementById('statsbox').innerHTML = "Current Score: " + stats.score +
             "<br>Ratio:" + stats.ratio[0] + "/" + stats.ratio[1] +
-            "<br>Attacked with: + " + attack
+            "<br>Attacked with: " + attack
             ;
     }
 }
