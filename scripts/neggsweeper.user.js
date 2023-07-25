@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Vira's Neggsweeper Solver
 // @namespace    Violentmonkey Scripts
-// @version      0.1
-// @description  try to take over the world!
+// @version      0.3
+// @description  Plays Neggsweeper pretty well
 // @author       You
 // @match        https://www.neopets.com/games/neggsweeper/neggsweeper.phtml*
 // @match        https://www.neopets.com/games/neggsweeper/index.phtml
@@ -12,30 +12,35 @@
 // @resource headerHTML ../resources/html/default_box.html
 // @grant        GM_getResourceText
 // @grant        GM_addStyle
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
 // Ideas for improvements:
-// Track stats in info box at the top. Current win/loss. Todays profits, etc.
 // Toggle switches for if we want to do: Autoplay or just mark greens, if we actually flag the mine spots
 // A debug toggle, plays one step and logs possbile interesting things
 // a hint button for if we get stuck
 
 var KEY_PLAY = 'playNeggSweeper';
+const STATS = "stats";
+const TO_CLEAR = "to_clear";
+const TO_FLAG = "to_flag";
 var DEBUG = false;
-var FAST_MODE = false; // this will only do the math once, so not all next steps will be highlighted
-var NP_LIMIT = 3000;
+var FAST_MODE = true; // this will only do the math once, so not all next steps will be highlighted
+var NP_LIMIT = 3000; // change to large number if you want to play forever
 // useful array for getting adjacent nodes, i.e. neighbours
-var NEIGHBOUR_OFFSET = [[1,-1],[1,0],[1,1],[0,-1],[0,1],[-1,-1],[-1,0],[-1,1]];
-var SAFE_IMAGE = "https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/green_bean.gif";
-var UNSAFE_IMAGE = "https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/red_bean.gif";
-var HIDDEN = -1;
-var SAFE = -2;
-var FLAGGED = -3;
-var UNSAFE = -4;
+const NEIGHBOUR_OFFSET = [[1,-1],[1,0],[1,1],[0,-1],[0,1],[-1,-1],[-1,0],[-1,1]];
+const SAFE_IMAGE = "https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/green_bean.gif";
+const POP_IMAGE = "https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/target_bean.gif";
+const UNSAFE_IMAGE = "https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/red_bean.gif";
+const HIDDEN = -1;
+const SAFE = -2;
+const FLAGGED = -3;
+const UNSAFE = -4;
 // full grid node
 var grid;
-// all nodes 
-var td; 
+// all nodes
+var td;
 // length of one side of the board
 var size;
 // the coordinates of where we click
@@ -56,8 +61,14 @@ var to_clear = [];
 // mark as unsafe nodes. [[x,y]]
 var to_flag = [];
 
+// refresh the page if something went wrong (probably neopets time out)
+window.onerror = function() {
+  window.setTimeout(function(){location.reload();}, 1002 * (1 + Math.random()));
+}
+
 add_header();
 add_buttons();
+add_statsbox();
 
 if (JSON.parse(localStorage.getItem(KEY_PLAY))) {
     // setTimeout(start, 2000 * (1 + Math.random())); // 1-2 seconds
@@ -110,7 +121,7 @@ function get_neighbours(x,y) {
 }
 function is_inside_board(v) {
     return v[0] >= 0 && v[0] < size &&
-           v[1] >= 0 && v[1] < size; 
+           v[1] >= 0 && v[1] < size;
 }
 function is_numbered(n) {
     return board[n[1]][n[0]] > 0;
@@ -137,41 +148,99 @@ function parse_board() {
 function fancy_images(n) {
     images[n[1]][n[0]].src = this.image;
 }
-function update_grid_images() {
-    to_clear.forEach(fancy_images, {image: SAFE_IMAGE});
+function update_grid_images(to_pop) {
     to_flag.forEach(fancy_images, {image: UNSAFE_IMAGE});
+    to_clear.forEach(fancy_images, {image: SAFE_IMAGE});
+    [to_pop].forEach(fancy_images, {image: POP_IMAGE});
 }
-function fast_flagging() {
-    to_flag.forEach(update_board, {value: UNSAFE});
-    to_clear.forEach(update_board, {value: SAFE});
-}
-function update_board(f) {
-    board[f[1]][f[0]] = this.value;
+function update_board(n) {
+    board[n[1]][n[0]] = this.value;
 }
 
+function save_solved() {
+    // UNSAFE
+    var saved_flags = JSON.parse(localStorage.getItem(TO_FLAG));
+    if (!saved_flags) {
+        saved_flags = [];
+    }
+    saved_flags = saved_flags.concat(to_flag);
+    saved_flags.forEach(fancy_images, {image: UNSAFE_IMAGE});
+    localStorage.setItem(TO_FLAG, JSON.stringify(saved_flags));
+
+    // SAFE
+    localStorage.setItem(TO_CLEAR, JSON.stringify(to_clear));
+}
+function load_solved() {
+    // UNSAFE
+    var saved_flags = JSON.parse(localStorage.getItem(TO_FLAG));
+    if (!saved_flags) {
+        saved_flags = [];
+    }
+    saved_flags.forEach(update_board, {value: UNSAFE});
+
+    // SAFE
+    to_clear = JSON.parse(localStorage.getItem(TO_CLEAR));
+    if (!to_clear) {
+        to_clear = [];
+    }
+}
+function clear_solved() {
+    localStorage.removeItem(TO_FLAG);
+    localStorage.removeItem(TO_CLEAR);
+}
 
 function my_solve() {
+    to_flag = [];
+    // to_clear = [];
     read_page();
-    update_grid_images();
-    to_clear = [];
-    do {
-        to_flag = [];
+    load_solved();
+    to_clear = to_clear.filter(is_hidden);
+    to_clear.forEach(update_board, {value: SAFE});
+    // fast mode just clicks right away if we can
+    if (!(FAST_MODE && to_clear.length > 0)) {
+        parse_board();
+        easy_solve();
         parse_board();
         matrix_solve();
-        update_grid_images();
-        fast_flagging();
-    } while (to_flag.length != 0 && !FAST_MODE)
+    }
+
     if (to_clear.length == 0) {
         guess();
     }
 
+    var to_pop;
     if(!DEBUG) {
-        clear(to_clear[0][0], to_clear[0][1]);
+        to_pop = to_clear.pop();
+        clear(to_pop[0], to_pop[1]);
     } else {
+        to_pop = to_clear[to_clear.length-1];
         console.debug(to_clear);
     }
+    save_solved();
+    update_grid_images(to_pop);
 }
 
+function easy_solve() {
+    for (var y=0; y < size; y++) {
+        for (var x=0; x < size; x++) {
+            if (board[y][x] > 0) {
+                let neighbours = get_neighbours(x,y);
+                let unres = neighbours.filter(is_hidden);
+                let nof_mines = neighbours.filter(is_mine).length;
+                let hidden_mine_count = board[y][x] - nof_mines;
+                // this shouldnt be needed, but reduced form jumbles lines sometimes
+                // and hey, maybe we save some time by making matrix smaller?
+                if (unres.length > 0 && hidden_mine_count == 0) {
+                    to_clear = to_clear.concat(unres);
+                    unres.forEach(update_board, {value: SAFE});
+                } else if (unres.length > 0 && unres.length == hidden_mine_count) {
+                    to_flag = to_flag.concat(unres);
+                    unres.forEach(update_board, {value: UNSAFE});
+                }
+            }
+        }
+    }
+}
 
 function matrix_solve() {
     // A,B,C = unrevealed nodes around a numbered node
@@ -180,7 +249,7 @@ function matrix_solve() {
     // _all unrevealed nodes_ = nof_mines_left // this is a bonus row
     // all_numbered filter must have a neighbour with an unrevealed (or it is useless)
     // set = unrevealed.flatten()
-    // so a matrix row is 
+    // so a matrix row is
     var nodes = [];
     var abc = [];
     var n = [];
@@ -189,21 +258,16 @@ function matrix_solve() {
             if (board[y][x] > 0) {
                 let neighbours = get_neighbours(x,y);
                 let unres = neighbours.filter(is_hidden);
-                let mine_count = board[y][x] - mines[y][x];
-                // this shouldnt be needed, but reduced form jumbles lines sometimes
-                // and hey, maybe we save some time by making matrix smaller?
-                if (unres.length > 0 && mine_count == 0) {
-                    to_clear = to_clear.concat(unres);
-                } else if (unres.length > 0 && unres.length == mine_count) {
-                    to_flag = to_flag.concat(unres);
-                } else if (unres.length > 0 && mine_count > 0) {
+                let hidden_mine_count = board[y][x] - mines[y][x];
+                // Add all neighbouring nodes
+                if (unres.length > 0) {
                     unres.forEach(function(u) {
                         // this is really ugly, but we're just making sure we only add each node once...
-                        if (!nodes.some(function(a) {return (a[0] == u[0] && a[1] == u[1])})) {
+                        if (!nodes.some(function(a) {return (a[0] == u[0] && a[1] == u[1])}) && board[u[1]][u[0]] == HIDDEN ) {
                             nodes.push(u);
                         }
                     })
-                    n.push(mine_count);
+                    n.push(hidden_mine_count);
                     abc.push(unres);
                 }
             }
@@ -236,7 +300,7 @@ function matrix_solve() {
     if (nof_hidden == nodes.length) {
         let nof_flagged = total_nof_flagged();
         let bonus_row = new Array(nodes.length).fill(1);
-        console.debug(nof_flagged);
+        // console.debug(nof_flagged);
         bonus_row.push(total_nof_mines() - nof_flagged);
         matrix.push(bonus_row);
     }
@@ -280,16 +344,16 @@ function matrix_solve() {
         // X - Y - Z = 1 => X is mine, Y and Z are clear (sum of positives)
 
         // If none of that is true we can get probability
-        // X + Y     = 1 => 1 / 2 = 50% 
+        // X + Y     = 1 => 1 / 2 = 50%
         // X + Y + Z = 1 => 1 / 3 = 33.33%
         // X - Y - Z = 0 =>  0 0 0 / 1 1 0 / 1 0 1 => X = 66% Y/Z = 33% forumla becomes => sum_opposite / (sum_sign + sum_opposite)
         // X + Y - Z = 1 =>  1 0 0 / 0 1 0 / 1 1 1 => X/Y = 50% Z = 33% sum_opposite / (sum_sign + sum_opposite ) 2 / 4
         // X + Y + Z - W = 1 => 110 1/101 1/100 0/010 0/001 0 => X/Y/Z = 2/5 W = 2/5    3 - 1 = 1
         // X + Y + Z - W = 2 => 1100/1010/0110/1111 => X/Y/Z = 3/5 W = 1/5    3 - 1 = 2
-        // A + B + C + D - X = 2 =>  
+        // A + B + C + D - X = 2 =>
 
-        // 3 positive 2 negative = 1 => 1 pos 0 neg / 
-        
+        // 3 positive 2 negative = 1 => 1 pos 0 neg /
+
         var pos_clear = false;
         var neg_clear = false;
         var pos_flag = false;
@@ -394,12 +458,14 @@ function new_game() {
     		null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
 
     if (select.snapshotLength > 0) {
+        clear_solved();
         select = select.snapshotItem(0);
         select.selectedIndex = select.length - 1;	// Choose last item (Hard)
 
         if (KEY_PLAY)	// Determine if we will keep playing
         {
             var page_content = select.parentNode;
+            var np_today = 0;
 
             while (page_content) {
                 if (page_content.nodeName == "B") {
@@ -412,16 +478,18 @@ function new_game() {
                     return;
                 }
             }
+            var stats = GM_getValue(STATS, {wins: 0, losses: 0});
             if (page_content.innerHTML != "You Lose!!!") {
-                page_content = parseInt(page_content.innerHTML);
+                stats.wins++;
+                np_today = parseInt(page_content.innerHTML);
 
-                console.info("We made "+page_content+" NP today.");
+                console.info("We made "+np_today+" NP today.");
 
-                if (page_content >= NP_LIMIT) {
-                    return 1;
-                }
+            } else {
+              stats.losses++;
             }
-            if(!DEBUG) {
+            GM_setValue(STATS, stats);
+            if(!DEBUG && np_today < NP_LIMIT) {
                 window.setTimeout(function(){select.parentNode.submit();}, 1000);
             }
         }
@@ -429,17 +497,14 @@ function new_game() {
         return 1;
     }
     return 0;
-    
+
 }
 
 function clear(x,y) {
-    if (board[y][x] != HIDDEN || x >= size || y >= size) {
-        console.error("Trying to clear known node");
-    }
     input_flag.value = '';
     // td[pos_to_td(x,y)].click();
     input_position.value = x + '-' + y;
-    window.setTimeout(function(){grid.submit();}, 1500 * (1 + Math.random()));
+    window.setTimeout(function(){grid.submit();}, 1008 * (1 + Math.random()));
 
 }
 function flag(x,y) {
@@ -475,23 +540,8 @@ function total_nof_flagged() {
 function guess() {
     let nof_hidden = total_nof_hidden();
     // if we have to start guessing in early game, pick corners
-    if (nof_hidden > size*size - 4) {
-        if (board[0][0] == HIDDEN) {
-            to_clear = [[0,0]];
-            return;
-        } else if (board[0][size-1] == HIDDEN) {
-            to_clear = [[size-1,0]];
-            return;
-        } else if (board[size-1][0] == HIDDEN) {
-            to_clear = [[0,size-1]];
-            return;
-        } else if (board[size-1][size-1] == HIDDEN) {
-            to_clear = [[size-1,size-1]];
-            return;
-        }
-    }
 
-    
+
     // chance of clicking mine by randomly picking
     let random_pick = (total_nof_mines() - total_nof_flagged()) / nof_hidden;
     var best_prob = random_pick;
@@ -510,9 +560,24 @@ function guess() {
         }
     }
 
+    let corners = eligble.filter(function(value) {return (value[0] == 0 && (value[1] == 0 || value[1] == size-1 )) 
+            || (value[0] == size-1 && (value[1] == 0 || value[1] == size-1 )) 
+            || (value[1] == 0 && (value[0] == 0 || value[0] == size-1 )) 
+            || (value[1] == size-1 && (value[0] == 0 || value[0] == size-1 )) 
+        });
+    if (corners.length > 0) {
+        eligble = corners;        
+    } else {
+        // http://mrgris.com/projects/minesweepr/ guessing along the edghes should improve winrate by 4%
+        let edges = eligble.filter(function(value) {return (value[0] == 0 || value[0] == size-1 || value[1] == 0 || value[1] == size-1)});
+        if (edges.length > 0) {
+            eligble = edges;        
+        }
+        // another good heurisitc would be to pick a low probability hidden close to a numbered node
+    }
     // pick a random square to click
     let i = Math.floor(Math.random()*(eligble.length - 1));
-    console.info("Guessing: " + eligble[i] + "with a probability of hitting a mine at: " + best_prob);
+    console.info("Guessing: " + eligble[i]);
     to_clear.push(eligble[i]);
 }
 
@@ -533,9 +598,33 @@ function add_buttons() {
     update_play_button();
 }
 
+function add_statsbox() {
+    var stats_box = document.createElement('div');
+    stats_box.id = 'statsbox';
+    stats_box.style.display = 'block';
+    stats_box.style.margin = '5 auto';
+    stats_box.style.textAlign = 'center';
+    var content = document.getElementsByClassName('div-stuff')[0];
+    content.prepend(stats_box);
+    update_statsbox_text();
+}
+
+function update_statsbox_text() {
+    var stats = GM_getValue(STATS, null);
+    if (!stats) {
+        document.getElementById('statsbox').innerHTML = "No stats available yet";
+    } else {
+        let games_played = stats.wins + stats.losses;
+        let winrate = stats.wins / games_played;
+        document.getElementById('statsbox').innerHTML = "Games Played: " + games_played +
+            "<br>Winrate:" + winrate
+            ;
+    }
+}
+
 function update_play_button() {
     var autoplayIsOn = !!JSON.parse(localStorage.getItem(KEY_PLAY));
-    document.getElementById('autoplayer').innerHTML = (autoplayIsOn ? 'Stop AutoPlay' : 'Start AutoPlay');
+    document.getElementById('autoplayer').innerHTML = (autoplayIsOn ? 'Stop' : 'Start');
 }
 
 function toggle_auto() {
@@ -548,3 +637,4 @@ function toggle_auto() {
         start();
     }
 }
+
