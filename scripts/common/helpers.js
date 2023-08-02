@@ -4,7 +4,31 @@
  * @param interval [min,max] seconds
  */
 function delay(fn, interval) {
-  setTimeout(fn, 1000 * ((interval[1] - interval[0]) * Math.random() + interval[0]));
+    let d = ((interval[1] - interval[0]) * Math.random() + interval[0]) * 1000;
+    unreliable_load(fn,d);
+}
+
+/**
+ *  Neopet pages fails to load all the time.
+ *  Cancel and re-try to avoid getting stuck.
+ * @param fn Callback function
+ * @param d delay in milliseconds
+ */
+function unreliable_load(fn, d) {
+    setTimeout(fn, d);
+    setTimeout(function() {
+      window.stop();
+      unreliable_load(fn,d+10); // wait a little extra each time
+    }, d+8000);
+}
+
+
+/**
+ * get time today in seconds
+ */
+function secs_today() {
+    let date = new Date();
+    return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
 }
 
   
@@ -41,7 +65,7 @@ function wait_for(fn) {
  * @param value new value
  */
 function add(accumulator, value) {
-  return accumulator + value;
+    return accumulator + value;
 }
 
 /**
@@ -49,5 +73,5 @@ function add(accumulator, value) {
  * @param arr the arry we want to get the sum of
  */
 function sum(arr) {
-  return arr.reduce(add, 0);
+    return arr.reduce(add, 0);
 }

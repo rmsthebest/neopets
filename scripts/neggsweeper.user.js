@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Vira's Neggsweeper Solver
 // @namespace    Violentmonkey Scripts
-// @version      0.3
+// @version      0.4
 // @description  Plays Neggsweeper pretty well
 // @author       You
 // @match        https://www.neopets.com/games/neggsweeper/neggsweeper.phtml*
 // @match        https://www.neopets.com/games/neggsweeper/index.phtml
 // @icon         https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/favicon/favicon-32x32.png
 // @require      ./common/ui.js
+// @require      ./common/helpers.js
 // @resource someCss ../resources/html/some.css
 // @resource headerHTML ../resources/html/default_box.html
 // @grant        GM_getResourceText
@@ -60,11 +61,6 @@ var images;
 var to_clear = [];
 // mark as unsafe nodes. [[x,y]]
 var to_flag = [];
-
-// refresh the page if something went wrong (probably neopets time out)
-window.onerror = function() {
-  window.setTimeout(function(){location.reload();}, 1002 * (1 + Math.random()));
-}
 
 add_header();
 add_buttons();
@@ -490,7 +486,7 @@ function new_game() {
             }
             GM_setValue(STATS, stats);
             if(!DEBUG && np_today < NP_LIMIT) {
-                window.setTimeout(function(){select.parentNode.submit();}, 1000);
+                delay(function(){select.parentNode.submit();}, [0.9,1.2]);
             }
         }
 
@@ -504,7 +500,7 @@ function clear(x,y) {
     input_flag.value = '';
     // td[pos_to_td(x,y)].click();
     input_position.value = x + '-' + y;
-    window.setTimeout(function(){grid.submit();}, 1008 * (1 + Math.random()));
+    delay(function(){grid.submit();}, [0.314,0.712]);
 
 }
 function flag(x,y) {
@@ -514,7 +510,7 @@ function flag(x,y) {
     input_flag.value = 1;
     // td[pos_to_td(x,y)].click();
     input_position.value = x + '-' + y;
-    window.setTimeout(function(){grid.submit();}, 1500 * (1 + Math.random()));
+    delay(function(){grid.submit();}, [0.314,0.712]);
 }
 function pos_to_td(x,y) {
     return y * size + x;
