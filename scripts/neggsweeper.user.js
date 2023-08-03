@@ -23,6 +23,7 @@
 // a hint button for if we get stuck
 
 var KEY_PLAY = 'playNeggSweeper';
+const DIFFICULTY = 1; // 1 = EASY, 2 = MEDIUM (Unsupported), 3 = HARD
 const STATS = "stats";
 const TO_CLEAR = "to_clear";
 const TO_FLAG = "to_flag";
@@ -61,6 +62,10 @@ var images;
 var to_clear = [];
 // mark as unsafe nodes. [[x,y]]
 var to_flag = [];
+
+if(DEBUG) {
+    clear_solved();
+}
 
 add_header();
 add_buttons();
@@ -201,6 +206,7 @@ function my_solve() {
     }
 
     if (to_clear.length == 0) {
+        parse_board();
         guess();
     }
 
@@ -216,6 +222,8 @@ function my_solve() {
     update_grid_images(to_pop);
 }
 
+// this shouldnt be needed, but reduced form jumbles lines sometimes
+// and hey, maybe we save some time by making matrix smaller?
 function easy_solve() {
     for (var y=0; y < size; y++) {
         for (var x=0; x < size; x++) {
@@ -224,8 +232,6 @@ function easy_solve() {
                 let unres = neighbours.filter(is_hidden);
                 let nof_mines = neighbours.filter(is_mine).length;
                 let hidden_mine_count = board[y][x] - nof_mines;
-                // this shouldnt be needed, but reduced form jumbles lines sometimes
-                // and hey, maybe we save some time by making matrix smaller?
                 if (unres.length > 0 && hidden_mine_count == 0) {
                     to_clear = to_clear.concat(unres);
                     unres.forEach(update_board, {value: SAFE});
@@ -456,7 +462,7 @@ function new_game() {
     if (select.snapshotLength > 0) {
         clear_solved();
         select = select.snapshotItem(0);
-        select.selectedIndex = select.length - 1;	// Choose last item (Hard)
+        select.selectedIndex = DIFFICULTY;	// Difficulty
 
         if (KEY_PLAY)	// Determine if we will keep playing
         {
@@ -474,19 +480,43 @@ function new_game() {
                     return;
                 }
             }
-            var stats = GM_getValue(STATS, {wins: 0, losses: 0});
+            var stats = GM_getValue(STATS, {easy: {wins: 0, losses: 0}, medium: {wins: 0, losses: 0, played: 0, winrate: 0}, hard: {wins: 0, losses: 0, played: 0, winrate: 0}, current_difficulty: select.selectedIndex, daily_best: 0, daily_total: 0});
             if (page_content.innerHTML != "You Lose!!!") {
-                stats.wins++;
+                switch(stats.current_difficulty) {
+                    case 1:
+                        stats.easy.wins++;
+                        break;
+                    case 2:
+                        stats.medium.wins++;
+                        break;
+                    case 3:
+                        stats.hard.wins++;
+                        break;
+                }
                 np_today = parseInt(page_content.innerHTML);
+                stats.daily_total = np_today;
 
-                console.info("We made "+np_today+" NP today.");
+                //console.info("We made "+np_today+" NP today.");
 
             } else {
-              stats.losses++;
+                switch(stats.current_difficulty) {
+                    case 1:
+                        stats.easy.losses++;
+                        break;
+                    case 2:
+                        stats.medium.losses++;
+                        break;
+                    case 3:
+                        stats.hard.losses++;
+                        break;
+                }
             }
+            update_stats();
+            update_statsbox_text();
+            stats.current_difficulty = select.selectedIndex;
             GM_setValue(STATS, stats);
             if(!DEBUG && np_today < NP_LIMIT) {
-                delay(function(){select.parentNode.submit();}, [0.9,1.2]);
+                delay(function(){select.parentNode.submit();}, [1.1,1.3]);
             }
         }
 
@@ -539,18 +569,47 @@ function guess() {
 
 
     // chance of clicking mine by randomly picking
-    let random_pick = (total_nof_mines() - total_nof_flagged()) / nof_hidden;
+    let random_pick = (nof_hidden - (total_nof_mines() - total_nof_flagged())) / nof_hidden;
     var best_prob = random_pick;
     var eligble = [];
     for (var y = 0; y < size; y++) {
         for (var x = 0; x < size; x++) {
-            if (board[y][x] == HIDDEN) {
-                let prob = Math.max((hidden[y][x] - mines[y][x]) / hidden[y][x], random_pick);
-                if (best_prob < prob) {
-                    best_prob = prob;
-                    eligble = [[x,y]]; // why do i store it like this..
-                } else if (best_prob == prob) {
-                    eligble.push([x,y]); // why do i store it like this..
+            // if on numbered we can do simple probability for neighbours
+            // if on hidden and no numbered neighbours it is as good as random
+            if (board[y][x] > 0 && hidden[y][x] > 0) {
+                let mines_left = board[y][x] - mines[y][x];
+                let prob = (hidden[y][x] - mines_left) / hidden[y][x];
+                for (var i = -1; i <= 1; i++) {
+                    let yi = y+i;
+                    if (yi < 0 || yi > size -1) {
+                        continue
+                    }
+
+                    for (var j = -1; j <= 1; j++) {
+                        let xj = x+j;
+                        if (xj < 0 || xj > size -1 ) {
+                            continue
+                        }
+                        if (board[yi][xj] != HIDDEN) {
+                            continue
+                        }
+
+                        // probability is measured in "chance of clicking a safe node"
+                        // So higher is better
+                        if (prob > best_prob) {
+                            best_prob = prob;
+                            eligble = [[xj,yi]]; // why do i store it like this..
+                        } else if (best_prob == prob) {
+                            if (!eligble.some(function(a) {return (a[0] == xj && a[1] == yi)})) {
+                                eligble.push([xj,yi]); // why do i store it like this..
+                            }
+                        }
+                    }
+                }
+            } else if (board[y][x] == HIDDEN && best_prob == random_pick) {
+                let n = get_neighbours(x,y);
+                if (n.filter(is_numbered).length == 0) {
+                    eligble.push([x,y]);
                 }
             }
         }
@@ -572,9 +631,9 @@ function guess() {
         // another good heurisitc would be to pick a low probability hidden close to a numbered node
     }
     // pick a random square to click
-    let i = Math.floor(Math.random()*(eligble.length - 1));
-    console.info("Guessing: " + eligble[i]);
-    to_clear.push(eligble[i]);
+    let pick = Math.floor(Math.random()*(eligble.length - 1));
+    console.info("Guessing: " + eligble[pick]);
+    to_clear.push(eligble[pick]);
 }
 
 // ---------------SETUP UI --------------------
@@ -605,16 +664,41 @@ function add_statsbox() {
     update_statsbox_text();
 }
 
+function update_stats() {
+    var stats = GM_getValue(STATS, null);
+    if (!stats) {
+        document.getElementById('statsbox').innerHTML = "No stats available yet";
+    } else {
+        stats.easy.played = stats.easy.wins + stats.easy.losses;
+        stats.easy.winrate = (stats.easy.wins / stats.easy.played).toFixed(4);
+        stats.medium.played = stats.medium.wins + stats.medium.losses;
+        stats.medium.winrate = (stats.medium.wins / stats.medium.played).toFixed(4);
+        stats.hard.played = stats.hard.wins + stats.hard.losses;
+        stats.hard.winrate = (stats.hard.wins / stats.hard.played).toFixed(4);
+    }
+    GM_setValue(STATS, stats);
+}
+
 function update_statsbox_text() {
     var stats = GM_getValue(STATS, null);
     if (!stats) {
         document.getElementById('statsbox').innerHTML = "No stats available yet";
     } else {
-        let games_played = stats.wins + stats.losses;
-        let winrate = stats.wins / games_played;
-        document.getElementById('statsbox').innerHTML = "Games Played: " + games_played +
-            "<br>Winrate:" + winrate
-            ;
+        let html_start = "<table><tr><th>Difficulty</th><th>Winrate</th><th>Games</th></tr>";
+        let html_end = "</table>";
+        var html_middle = "";
+        if (stats.easy.played > 0) {
+            html_middle += "<tr><td>Easy:</td><td>" + stats.easy.winrate + "</td><td>" + stats.easy.played + "</td></tr>";
+        }
+        if (stats.medium.played > 0) {
+            html_middle += "<tr><td>Medium:</td><td>" + stats.medium.winrate + "</td><td>" + stats.medium.played + "</td></tr>";
+        }
+        if (stats.hard.played > 0) {
+            html_middle += "<tr><td>Hard:</td><td>" + stats.hard.winrate + "</td><td>" + stats.hard.played + "</td></tr>";
+        }
+        html_end+= "<br><br> Daily Total: " + stats.daily_total;
+
+        document.getElementById('statsbox').innerHTML = html_start + html_middle + html_end;
     }
 }
 
