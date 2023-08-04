@@ -69,9 +69,21 @@ function add(accumulator, value) {
 }
 
 /**
- * Sum of an array
+ *  computes the of an array
  * @param arr the arry we want to get the sum of
  */
 function sum(arr) {
     return arr.reduce(add, 0);
+}
+
+/**
+ * computes the hash of a string
+ * @param s string to hash
+ * @returns hash of s
+*/
+function hash(s) {
+  return s.split("").reduce(function(a, b) {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
 }
