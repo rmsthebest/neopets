@@ -6,7 +6,6 @@
 // @author       rmsthebest
 // @match        https://www.neopets.com/objects.phtml?obj_type=70&type=shop
 // @icon         https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/favicon/favicon-32x32.png
-// @require      ./common/ui.js
 // @require      ./common/helpers.js
 // @resource     someCss ../resources/html/some.css
 // @resource     headerHTML ../resources/html/default_box.html
@@ -20,7 +19,6 @@
 const PET_NAME = "CHANGE_ME"
 const READ_BOOKS = "RBKEY";
 
-add_header();
 add_all_ui();
 highlight_read_books();
 
@@ -90,8 +88,20 @@ function url_to_hash(url) {
 
 /// ----------- UI --------------------------------------------------
 function add_all_ui() {
+  add_header();
   add_statsbox();
   add_buttons();
+}
+
+function add_header() {
+    var div = document.createElement("div");
+    let html = GM_getResourceText("headerHTML");
+    div.innerHTML = html;
+    let css = GM_getResourceText("someCss");
+    let style = GM_addStyle(css);
+    var content = document.getElementsByClassName('shop-info')[0];
+    content.prepend(style);
+    content.append(div);
 }
 
 function add_statsbox() {
@@ -121,7 +131,7 @@ function add_buttons() {
     updateRead.id = 'update-read';
     updateRead.style.display = 'block';
     updateRead.style.margin = '0 auto';
-    updateRead.addEventListener('click', update_read_books);
+    updateRead.addEventListener('click', update_read_button);
 
     var content = document.getElementsByClassName('div-stuff')[0];
     if (content) {
@@ -131,7 +141,7 @@ function add_buttons() {
 
 function update_read_button() {
     update_read_books();
-    var stats_box = document.getElementsByClassName('statsbox')[0];
+    var stats_box = document.getElementsById('statsbox');
     update_stats_text(stats_box);
 }
 
