@@ -5,6 +5,22 @@
 // @description  Highlights books you might want to buy
 // @author       rmsthebest
 // @match        https://www.neopets.com/objects.phtml?obj_type=70&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=70
+// @match        https://www.neopets.com/objects.phtml?obj_type=70&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=7
+// @match        https://www.neopets.com/objects.phtml?obj_type=7&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=38
+// @match        https://www.neopets.com/objects.phtml?obj_type=38&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=51
+// @match        https://www.neopets.com/objects.phtml?obj_type=51&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=77
+// @match        https://www.neopets.com/objects.phtml?obj_type=77&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=92
+// @match        https://www.neopets.com/objects.phtml?obj_type=92&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=106
+// @match        https://www.neopets.com/objects.phtml?obj_type=106&type=shop
+// @match        https://www.neopets.com/objects.phtml?type=shop&obj_type=114
+// @match        https://www.neopets.com/objects.phtml?obj_type=114&type=shop
 // @icon         https://raw.githubusercontent.com/rmsthebest/neopets/master/resources/images/favicon/favicon-32x32.png
 // @require      ./common/helpers.js
 // @resource     someCss ../resources/html/some.css
@@ -17,7 +33,8 @@
 // ==/UserScript==
 
 const PET_NAME = "CHANGE_ME"
-const READ_BOOKS = "RBKEY";
+const READ_BOOKTASTIC = "RBKEY";
+const READ_BOOKS= "RB2KEY";
 
 add_all_ui();
 highlight_read_books();
@@ -42,9 +59,19 @@ function match_book(item) {
 }
 
 function update_read_books() {
+  var url;
+  var store_key;
+  if(document.URL.includes("neopets.com/objects.phtml?obj_type=70&type=shop")) {
+    url = "https://www.neopets.com/moon/books_read.phtml?pet_name=" + PET_NAME;
+    store_key = READ_BOOKTASTIC;
+  } else {
+    url = "https://www.neopets.com/books_read.phtml?pet_name=" + PET_NAME;
+    store_key = READ_BOOKS;
+  }
+
   GM_xmlhttpRequest({
     method: "GET",
-    url: "https://www.neopets.com/moon/books_read.phtml?pet_name=" + PET_NAME,
+    url: url,
     // headers: {
     //   "User-Agent": "Mozilla/5.0", // If not specified, navigator.userAgent will be used.
     //   "Accept": "text/html" // If not specified, browser defaults will be used.
@@ -60,18 +87,24 @@ function update_read_books() {
         catch (err) {}
       }
       var read_books = [];
-      let images = responseXML.querySelectorAll("table[width='470'] > tbody > tr > td > img");
+      let images = responseXML.querySelectorAll("table > tbody > tr > td > img");
       images.forEach(function(img) {let v = url_to_hash(img.src); if(v) {read_books.push(v)}});
-      GM_setValue(READ_BOOKS, read_books);
+      GM_setValue(store_key, read_books);
     }
   });
 }
 
 function load_read_books() {
-    let arr = GM_getValue(READ_BOOKS, []);
+  var store_key;
+  if(document.URL.includes("neopets.com/objects.phtml?obj_type=70&type=shop")) {
+    store_key = READ_BOOKTASTIC;
+  } else {
+    url = "https://www.neopets.com/books_read.phtml?pet_name=" + PET_NAME;
+    store_key = READ_BOOKS;
+  }
+    let arr = GM_getValue(store_key, []);
     //console.debug(arr);
-    var set = new Set();
-    arr.forEach(function(v){set.add(v)});
+    var set = new Set(arr);
     return set;
 }
 
@@ -116,7 +149,14 @@ function add_statsbox() {
 }
 
 function update_stats_text(node) {
-    let len = GM_getValue(READ_BOOKS, []).length;
+  var store_key;
+  if(document.URL.includes("neopets.com/objects.phtml?obj_type=70&type=shop")) {
+    store_key = READ_BOOKTASTIC;
+  } else {
+    url = "https://www.neopets.com/books_read.phtml?pet_name=" + PET_NAME;
+    store_key = READ_BOOKS;
+  }
+    let len = GM_getValue(store_key, []).length;
     if (PET_NAME == "CHANGE_ME") {
         node.innerHTML = "<p>Edit script to add name of your pet</p>";
     } else {
@@ -141,7 +181,7 @@ function add_buttons() {
 
 function update_read_button() {
     update_read_books();
-    var stats_box = document.getElementsById('statsbox');
+    var stats_box = document.getElementById('statsbox');
     update_stats_text(stats_box);
 }
 
